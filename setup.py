@@ -34,7 +34,7 @@ setup(name=name,
 
       packages=['websockify'],
       include_package_data=True,
-      install_requires=['numpy'],
+      install_requires=['numpy','stomp'],
       zip_safe=False,
       entry_points={
         'console_scripts': [
