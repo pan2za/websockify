@@ -11,6 +11,8 @@ as taken from http://docs.python.org/dev/library/ssl.html#certificates
 
 '''
 
+import thread 
+import zmq
 import signal, socket, optparse, time, os, sys, subprocess, logging, errno
 try:    from socketserver import ForkingMixIn
 except: from SocketServer import ForkingMixIn
@@ -24,6 +26,7 @@ try:
 except:
     from cgi import parse_qs
     from urlparse import urlparse
+
 
 class ProxyRequestHandler(websocket.WebSocketRequestHandler):
 
@@ -352,6 +355,23 @@ def logger_init():
     h.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(h)
 
+def mq_listen(threadName, topic):
+    
+    print("mq_listen now")
+    context = zmq.Context()
+    
+    # First, connect our subscriber socket
+    subscriber = context.socket(zmq.SUB)
+    subscriber.connect('tcp://172.16.17.240:16161')
+    subscriber.setsockopt(zmq.SUBSCRIBE, "")
+
+    while True:
+        msg = subscriber.recv()
+        print("mq recv mesg : "+msg)
+        if msg == 'shutdown '+ str(topic):
+            break
+    print("zeromq listening end") 
+    os._exit(1)
 
 def websockify_init():
     logger_init()
@@ -424,6 +444,10 @@ def websockify_init():
     parser.add_option("--log-file", metavar="FILE",
             dest="log_file",
             help="File where logs will be saved")
+    #parser.add_option("--control-url", default="tcp://localhost:61616",
+    #        help="url from where to get exiting command ")
+    #parser.add_option("--control-topic", default=None,
+    #        help="topic to ensure the command is to current websockify")
 
 
     (opts, args) = parser.parse_args()
@@ -521,6 +545,15 @@ def websockify_init():
         opts.auth_plugin = auth_plugin_cls(opts.auth_source)
 
     del opts.auth_source
+    
+    topic = opts.listen_port
+    #if opts.control_topic is not None:
+    #	topic = opts.control_topic 
+    #cmd_url = 'tcp://localhost:61616'
+    #if opts.control_url is not None:
+    #    cmd_url = opts.control_url
+    
+    thread.start_new_thread(mq_listen, ("Thread", opts.listen_port));    
 
     # Create and start the WebSockets proxy
     libserver = opts.libserver
