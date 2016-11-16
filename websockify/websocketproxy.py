@@ -239,6 +239,8 @@ class WebSocketProxy(websocket.WebSocketServer):
         self.unix_target    = kwargs.pop('unix_target', None)
         self.ssl_target     = kwargs.pop('ssl_target', None)
         self.heartbeat      = kwargs.pop('heartbeat', None)
+        self.timestamp      = kwargs.pop('timestamp', None)
+        self.qurl           = kwargs.pop('qurl', None)
 
         self.token_plugin = kwargs.pop('token_plugin', None)
         self.auth_plugin = kwargs.pop('auth_plugin', None)
@@ -355,22 +357,26 @@ def logger_init():
     h.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(h)
 
-def mq_listen(threadName, topic):
-    
-    print("mq_listen now")
+def mq_listen(threadName, topic, timestamp, qurl):
+    logger = logging.getLogger(WebSocketProxy.log_prefix) 
+    logger.log(logging.INFO, "zmq is listening " + qurl + " for shutdown command")
     context = zmq.Context()
     
     # First, connect our subscriber socket
     subscriber = context.socket(zmq.SUB)
-    subscriber.connect('tcp://172.16.17.240:16161')
+    subscriber.connect(qurl)
     subscriber.setsockopt(zmq.SUBSCRIBE, "")
 
     while True:
         msg = subscriber.recv()
-        print("mq recv mesg : "+msg)
-        if msg == 'shutdown '+ str(topic):
-            break
-    print("zeromq listening end") 
+        logger.log(logging.INFO, "mq recv mesg : "+msg)
+        segs = msg.split(' ')
+        if len(segs) == 4:
+	    ts = int(segs[1])
+            port = int(segs[3])
+            if(ts > timestamp and topic == port):
+            	break;
+    logger.log(logging.INFO, "zeromq listening end") 
     os._exit(1)
 
 def websockify_init():
@@ -444,10 +450,10 @@ def websockify_init():
     parser.add_option("--log-file", metavar="FILE",
             dest="log_file",
             help="File where logs will be saved")
-    #parser.add_option("--control-url", default="tcp://localhost:61616",
-    #        help="url from where to get exiting command ")
-    #parser.add_option("--control-topic", default=None,
-    #        help="topic to ensure the command is to current websockify")
+    parser.add_option("--timestamp", type=int, default=0,
+            help="when to get exiting command ")
+    parser.add_option("--qurl", default='tcp://localhost:16161',
+            help="zmq server url ,e.g,tcp://1.23.4.5:16161")
 
 
     (opts, args) = parser.parse_args()
@@ -553,7 +559,7 @@ def websockify_init():
     #if opts.control_url is not None:
     #    cmd_url = opts.control_url
     
-    thread.start_new_thread(mq_listen, ("Thread", opts.listen_port));    
+    thread.start_new_thread(mq_listen, ( "Thread", opts.listen_port, opts.timestamp, opts.qurl));    
 
     # Create and start the WebSockets proxy
     libserver = opts.libserver
