@@ -6,8 +6,11 @@ novnc client --------------->websockify---------------------------->vnc server
 The idea here is:
 
 novnc client -------------->websockify--------------------------->vnc server
+
                               +                                     +
+                              
                               rctl-server---------(rctl-socket)----rctl-client
+                              
 
                               =rwctl-server                         =rvctl-client
 
